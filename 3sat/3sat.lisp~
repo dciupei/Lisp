@@ -1,0 +1,82 @@
+(defun eval-var (var state)
+  (cond 
+   (( atom state) nil)
+   ((eql(caar state) var) (cadr (car state)))
+   (t(eval-var var (cdr state)))))
+
+(defvar *clause* '(a (not b) c))
+
+(defun eval-clause (clause state)
+  (cond
+    ((null clause) nil)
+    ((and (atom (car clause)) (eq (eval-var (car clause) state)t)))  ;A
+    ((and (listp (car clause)) (eq (not (eval-var (cadar clause) state)) t))) ;(NOT A)
+    (t (eval-clause (cdr clause) state)) ))
+
+
+(defun flatten (list)
+  (cond
+   ((null list) nil) ; empty list
+   ((consp (car list)) ; first element is a cons
+    (append
+     (flatten (car list))
+     (flatten (cdr list)) ) )
+   (t ; first element is an atom
+    (cons (car list) (flatten (cdr list))) ) ) )
+
+(defun get-vars (clause)
+  (remove 'not (flatten clause)))
+
+(defvar *clauses* '((a (not b) c) (a (not b) (not c)) (a (not b) d)))
+
+(defun get-all-vars (clauses) 
+  (let((allvars (get-vars clauses)))  
+    (remove-duplicates (flatten allvars))))
+  
+    
+(defun unsat-clauses (clauses state)
+  (let* ((EC (eval-clause (car clauses) state)))
+    ;(print (car clauses))
+    ;(print EC)
+      ;(print unsat)
+    (cond 
+      ((null clauses) nil)
+        ((eq EC 'nil) (cons (car clauses)(unsat-clauses (cdr clauses) state)))
+      (t(unsat-clauses (cdr clauses) state)))));)
+
+      ;(cond
+       ; ((null clauses) unsat)
+     ;((not(eq EC 't)) (push clauses unsat))
+      ;  (t(unsat-clauses (cdr clauses) state)))))
+;(let ((unsat nil))
+ ;   (dolist (clause clauses)
+  ;    (unless (eval-clause clause state)
+	;(push clause unsat)))
+   ; unsat))
+          
+(defun flip-var (var state)
+  (cond 
+   ((null state) nil)
+   ((eq var (caar state))
+    (cons (list var (not (cadar state)))(cdr state)))
+   (t(cons (car state)(flip-var var (cdr state))))))
+
+(defun get-better-neighbor (clauses state vars max-num-unsat)
+  (cond
+   ((null vars) nil)
+      (t(let*((FlipV(flip-var(car vars) state))
+	      (unsat (unsat-clauses clauses FlipV)))
+	  
+	  (cond
+	((< (length unsat) max-num-unsat)(list FlipV unsat))
+	(t(get-better-neighbor clauses state (cdr vars) max-num-unsat)))))))
+
+
+(defun simple-hill-climb (clauses state dist unsat)
+  (cond 
+   ((= dist 0) nil)
+   ((null unsat) state)
+   (t (let* ((vars (get-all-vars clauses))
+	     (getB (get-better-neighbor clauses state vars
+						  (length unsat) )) )
+	(simple-hill-climb clauses (car getB) (- dist 1) (cadr getB))))))
